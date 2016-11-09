@@ -376,7 +376,7 @@ class SlackRTM(object):
     # Wrap this call in a compatibility duck-hunt.
     def api_call(self, *args, **kwargs):
         response = self.slack.api_call(*args, **kwargs)
-        if isinstance(response, str):
+        if isinstance(response, str) or isinstance(response, bytes):
             try:
                 response = response.decode('utf-8')
             except:
