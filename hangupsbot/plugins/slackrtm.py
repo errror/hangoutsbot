@@ -210,6 +210,7 @@ class SlackMessage(object):
 
         username4ho = username
         realname4ho = username
+        tag_from_slack = False
         if not is_bot:
             domain = slackrtm.get_slack_domain()
             username = slackrtm.get_username(user, user)
