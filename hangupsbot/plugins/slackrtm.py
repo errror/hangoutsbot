@@ -257,6 +257,7 @@ class SlackRTMSync(object):
         self.image_upload = image_upload
         self.slacktag = slacktag
         self.showslackrealnames = showslackrealnames
+        self.last_synced_image = ''
 
     def fromDict(sync_dict):
         sync_joins = True
@@ -304,7 +305,6 @@ class SlackRTM(object):
         self.apikey = self.config['key']
         self.threadname = None
         self.sending = 0
-        self.lastimg = ''
 
         self.slack = SlackClient(self.apikey)
         if not self.slack.rtm_connect():
@@ -1169,7 +1169,7 @@ class SlackRTM(object):
                 if msg.file_attachment:
                     if sync.image_upload:
                         self.loop.call_soon_threadsafe(asyncio.async, self.upload_image(sync.hangoutid, msg.file_attachment))
-                        self.lastimg = urllib.parse.unquote(os.path.basename(msg.file_attachment))
+                        sync.last_synced_image = urllib.parse.unquote(os.path.basename(msg.file_attachment))
                     else:
                         # we should not upload the images, so we have to send the url instead
                         response += msg.file_attachment
@@ -1181,18 +1181,18 @@ class SlackRTM(object):
     @asyncio.coroutine
     def handle_ho_message(self, event):
         for sync in self.get_syncs(hangoutid=event.conv_id):
-            if self.sending and (': ' in event.text or (self.lastimg and event.text[-1] == ':')):
+            if self.sending and (': ' in event.text or (sync.last_synced_image and event.text[-1] == ':')):
                 # this hangout message originated in slack
                 self.sending -= 1
-                if not self.lastimg:
+                if not sync.last_synced_image:
                     command = event.text.split(': ')[1]
                     event.text = command
                     logger.debug('attempting to execute %s', command)
                     yield from self.bot._handlers.handle_command(event)
                 return
-            if self.lastimg and self.lastimg in urllib.parse.unquote(urllib.parse.unquote(event.text)):
+            if sync.last_synced_image and sync.last_synced_image in urllib.parse.unquote(urllib.parse.unquote(event.text)):
                 # already seen this image, skip
-                self.lastimg = ''
+                sync.last_synced_image = ''
                 return
             fullname = event.user.full_name
             if sync.hotag:
