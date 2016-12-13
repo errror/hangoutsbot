@@ -572,9 +572,12 @@ class SlackRTM(object):
             image_response = urllib.request.urlopen(request)
             content_type = image_response.info().get_content_type()
             filename_extension = mimetypes.guess_extension(content_type)
+            if filename_extension in [ '.jpe', '.jpeg' ]:
+                filename_extension = '.jpg'
             if filename[-(len(filename_extension)):] != filename_extension:
                 logger.info('No correct file extension found, appending "%s"' % filename_extension)
                 filename += filename_extension
+            filename = urllib.parse.unquote(filename)
             logger.info('uploading as %s', filename)
             image_id = yield from self.bot._client.upload_image(image_response, filename=filename)
             logger.info('sending HO message, image_id: %s', image_id)
@@ -1166,7 +1169,7 @@ class SlackRTM(object):
                 if msg.file_attachment:
                     if sync.image_upload:
                         self.loop.call_soon_threadsafe(asyncio.async, self.upload_image(sync.hangoutid, msg.file_attachment))
-                        self.lastimg = os.path.basename(msg.file_attachment)
+                        self.lastimg = urllib.parse.unquote(os.path.basename(msg.file_attachment))
                     else:
                         # we should not upload the images, so we have to send the url instead
                         response += msg.file_attachment
@@ -1178,15 +1181,16 @@ class SlackRTM(object):
     @asyncio.coroutine
     def handle_ho_message(self, event):
         for sync in self.get_syncs(hangoutid=event.conv_id):
-            if self.sending and ': ' in event.text:
+            if self.sending and (': ' in event.text or (self.lastimg and event.text[-1] == ':')):
                 # this hangout message originated in slack
                 self.sending -= 1
-                command = event.text.split(': ')[1]
-                event.text = command
-                logger.debug('attempting to execute %s', command)
-                yield from self.bot._handlers.handle_command(event)
+                if not self.lastimg:
+                    command = event.text.split(': ')[1]
+                    event.text = command
+                    logger.debug('attempting to execute %s', command)
+                    yield from self.bot._handlers.handle_command(event)
                 return
-            if self.lastimg and self.lastimg in event.text:
+            if self.lastimg and self.lastimg in urllib.parse.unquote(urllib.parse.unquote(event.text)):
                 # already seen this image, skip
                 self.lastimg = ''
                 return
